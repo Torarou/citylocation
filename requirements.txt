@@ -4,3 +4,5 @@ requests
 protobuf
 pandas
 grpcio-tools
+certifi
+truststore
