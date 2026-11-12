@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """京都市バス 車両位置マップ
 
@@ -141,9 +142,24 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    url = f"http://127.0.0.1:{args.port}/"
-    print(f"起動しました: {url}（終了は Ctrl+C）")
+    # Renderの環境変数PORTを取得
+    # ローカル実行時はargs.portを使用
+    port = int(os.environ.get("PORT", args.port))
+    
+    # Renderからアクセスできるように0.0.0.0で待ち受ける
+    server = ThreadingHTTPServer(
+        ("0.0.0.0", port),
+        Handler
+    )
+    
+    print(f"サーバーを起動しました。ポート: {port}")
+    
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("サーバーを終了します")
+    finally:
+        server.server_close()
     print(f"証明書の検証: {SSL_MODE}")
     if SSL_MODE == "Python 既定":
         print("証明書エラーの場合: pip install truststore")
