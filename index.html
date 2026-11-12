@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>京都市バス 車両位置マップ</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+ integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+:root{color-scheme:light;--bg:#f4f6f4;--surface:#fff;--text:#202923;--muted:#66736b;--line:#dce3de;--accent:#176b48;--danger:#a32626}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Noto Sans JP",sans-serif}
+main{max-width:1500px;margin:auto;padding:18px}
+h1{font-size:1.35rem;margin:0 0 3px}
+.sub{margin:0 0 15px;color:var(--muted)}
+.controls{display:flex;flex-wrap:wrap;align-items:end;gap:10px 14px;background:var(--surface);padding:14px;border:1px solid var(--line);border-radius:10px}
+label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:.82rem}
+input,select,button{font:inherit;border-radius:6px;padding:8px 10px}
+input,select{border:1px solid var(--line);background:white;color:var(--text)}
+#keys{width:min(390px,78vw)}
+#pass{width:90px}
+button{border:0;background:var(--accent);color:white;font-weight:650;cursor:pointer;padding-inline:20px}
+button:disabled{opacity:.55;cursor:wait}
+.status{min-height:1.5em;margin:10px 2px;color:var(--muted)}
+.error{padding:10px 12px;background:#fdecec;color:var(--danger);border-radius:7px;margin:8px 0}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:12px;align-items:start}
+#map{height:min(75vh,780px);min-height:470px;border:1px solid var(--line);border-radius:10px;background:#e7ece8;z-index:1}
+.side{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px}
+.side h2{font-size:.95rem;margin:0 0 8px}
+.route-list{margin:0;padding-left:1.25rem;color:var(--muted);font-size:.85rem}
+.note{font-size:.78rem;color:var(--muted);margin:10px 0 0}
+.bus-div-icon{background:transparent;border:0}
+.bus-label{display:flex;align-items:center;gap:6px;width:max-content;max-width:280px;min-height:43px;padding:4px 9px 4px 5px;background:rgba(255,255,255,0.8);border:1px solid #52645a;border-radius:8px;box-shadow:0 2px 7px #0003;white-space:nowrap;color:#17221b}
+.bus-label img{width:25px;height:25px;object-fit:contain;flex:none}
+.bus-copy{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.bus-key{font-size:12px;font-weight:800}
+.bus-name{font-size:10px;color:#536158;max-width:210px;overflow:hidden;text-overflow:ellipsis}
+.bus-extra{font-size:10px;color:#536158;margin-top:2px}
+.leaflet-popup-content{margin:10px 13px;line-height:1.6}
+.popup-title{font-weight:750;font-size:14px;margin-bottom:4px}
+.popup-row{font-size:12px}
+@media(max-width:850px){main{padding:12px}.layout{grid-template-columns:1fr}.side{order:2}#map{height:65vh;min-height:420px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>京都市バス 車両位置マップ</h1>
+  <p class="sub">routeKeyを指定して、走行中の車両を地図上に表示します。</p>
+
+  <form class="controls" id="form">
+    <label>routeKey（複数はカンマ区切り）
+      <input id="keys" placeholder="例: 9759 または 9759,9760" required>
+    </label>
+    <label>fromDisplayPassNo
+      <input id="pass" type="number" min="1" max="999" value="1">
+    </label>
+    <label>自動更新
+      <select id="auto">
+        <option value="0">なし</option><option value="15">15秒</option>
+        <option value="30">30秒</option><option value="60">60秒</option>
+      </select>
+    </label>
+    <button id="go" type="submit">取得・更新</button>
+  </form>
+
+  <div id="error"></div>
+  <div class="status" id="status">routeKeyを入力して「取得・更新」を押してください。</div>
+
+  <div class="layout">
+    <div id="map" aria-label="バス車両位置地図"></div>
+    <aside class="side">
+      <h2>指定した経路</h2>
+      <ul class="route-list" id="routeList"><li>未取得</li></ul>
+      <p class="note">経路名は同じフォルダの routes.csv から読み込みます。CSVがない場合やrouteKeyが登録されていない場合、経路名は表示しません。</p>
+      <p class="note">地図データ：OpenStreetMap</p>
+    </aside>
+  </div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+ integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const IMAGE_BASE = "https://kyotocity.bus-navigation.jp/wgsys/img/";
+const map = L.map("map").setView([35.0116, 135.7681], 13);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map);
+
+let routeNames = new Map();
+let markers = new Map();
+let timer = null;
+let hasFitted = false;
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+  })[ch]);
+}
+function imageUrl(value) {
+  const name = String(value || "").trim();
+  if (!name) return "";
+  if (/^https?:\/\//i.test(name)) return name;
+  return IMAGE_BASE + name.split("/").map(encodeURIComponent).join("/");
+}
+function parseCsv(text) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i], next = text[i + 1];
+    if (quoted) {
+      if (ch === '"' && next === '"') { field += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else field += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(field); field = ""; }
+    else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else if (ch !== "\r") field += ch;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+async function loadRouteNames() {
+  routeNames = new Map();
+  try {
+    const response = await fetch("/routes.csv", {cache:"no-store"});
+    if (!response.ok) return; // CSVがない場合は経路名なしで続行
+    const text = (await response.text()).replace(/^\uFEFF/, "");
+    const rows = parseCsv(text);
+    if (!rows.length) return;
+    const header = rows[0].map(x => x.trim());
+    const keyIndex = header.indexOf("routeKey");
+    const nameIndex = header.indexOf("routeName");
+    if (keyIndex < 0 || nameIndex < 0) return;
+    for (const row of rows.slice(1)) {
+      const key = (row[keyIndex] || "").trim();
+      const name = (row[nameIndex] || "").trim();
+      if (key && name) routeNames.set(key, name);
+    }
+  } catch (_) {
+    // routes.csv がない、または読み込めない場合は何も表示しない
+  }
+}
+function routeName(key) { return routeNames.get(String(key)) || ""; }
+function makePopup(m, key, name) {
+  const rows = [
+    ["車両番号", m.busCode],
+    ["routeKey", key],
+    ["経路名", name],
+    ["付近の停留所", m._nearStop || m.busStopName],
+    ["停留所順", m.displaypassno ?? m._nearNo],
+    ["緯度・経度", (m.lat != null && m.lng != null) ? `${m.lat}, ${m.lng}` : ""],
+    ["混雑度", congestionText(m.congestionLevel)],
+    ["更新時刻", formatTime(m.updateTime)]
+  ];
+  return `<div class="popup-title">バス車両情報</div>` +
+    rows.filter(([label, value]) => value !== null && value !== undefined && value !== "")
+      .map(([label, value]) => `<div class="popup-row"><b>${esc(label)}：</b>${esc(value)}</div>`).join("");
+}
+function congestionText(value) {
+  return ({"1":"空席あり","2":"ゆったり立てる","3":"混雑","4":"大変混雑"})[String(value)] || (value ?? "");
+}
+function formatTime(value) {
+  const s = String(value ?? "");
+  return /^\d{14}$/.test(s) ? `${s.slice(8,10)}:${s.slice(10,12)}:${s.slice(12,14)}` : s;
+}
+function markerKey(m, index, route) {
+  const bus = String(m.busCode ?? "");
+  return bus ? `${route}:${bus}` : `${route}:${m.lat}:${m.lng}:${index}`;
+}
+function makeMarker(m, key) {
+  const name = routeName(key);
+  const src = imageUrl(m.busMarkImg);
+  const image = src
+    ? `<img src="${esc(src)}" alt="" onerror="this.style.display='none'">`
+    : `<span style="font-size:25px">🚌</span>`;
+  const routeLine = name ? `<span class="bus-name">${esc(name)}</span>` : "";
+  const label = `<div class="bus-label">${image}<span class="bus-copy">` +
+    `<span class="bus-key">${esc(key || "routeKey不明")}</span>${routeLine}` +
+    `<span class="bus-extra">${esc(m.busCode || "")}${m.congestionLevel ? " ・ " + esc(congestionText(m.congestionLevel)) : ""}</span>` +
+    `</span></div>`;
+  const icon = L.divIcon({className:"bus-div-icon", html:label, iconSize:null, iconAnchor:[20,22]});
+  return L.marker([Number(m.lat), Number(m.lng)], {icon}).bindPopup(makePopup(m, key, name));
+}
+function updateRouteList(keys) {
+  const ul = $("routeList");
+  ul.replaceChildren();
+  for (const key of keys) {
+    const li = document.createElement("li");
+    const name = routeName(key);
+    li.textContent = name ? `${key}：${name}` : key;
+    ul.append(li);
+  }
+}
+function normalizeKeys(value) {
+  return value.trim().replace(/[、，\s]+/g, ",").split(",").map(x => x.trim()).filter(Boolean);
+}
+async function load() {
+  const keys = normalizeKeys($("keys").value);
+  const pass = $("pass").value || "1";
+  if (!keys.length) return;
+  if (keys.length > 30 || keys.some(k => !/^\d{1,6}$/.test(k))) {
+    showError("routeKeyは1～6桁の数字を最大30件、カンマ区切りで入力してください。");
+    return;
+  }
+  $("go").disabled = true;
+  $("error").replaceChildren();
+  $("status").textContent = "車両位置を取得中…";
+  try {
+    const url = `/api/vehicles?routeKeys=${encodeURIComponent(keys.join(","))}&fromDisplayPassNo=${encodeURIComponent(pass)}`;
+    const response = await fetch(url, {cache:"no-store"});
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || `HTTP ${response.status}`);
+    const all = Array.isArray(json.mapApproachData) ? json.mapApproachData : [];
+    const vehicles = all.filter(m => String(m.type) === "9" &&
+      Number.isFinite(Number(m.lat)) && Number.isFinite(Number(m.lng)));
+
+    const next = new Map();
+    vehicles.forEach((m, index) => {
+      const key = String(m.routeKey ?? (keys.length === 1 ? keys[0] : ""));
+      const id = markerKey(m, index, key);
+      const marker = makeMarker(m, key);
+      next.set(id, marker);
+      if (markers.has(id)) {
+        const old = markers.get(id);
+        old.setLatLng(marker.getLatLng());
+        old.setIcon(marker.options.icon);
+        old.setPopupContent(makePopup(m, key, routeName(key)));
+        old.addTo(map);
+        next.set(id, old);
+      } else marker.addTo(map);
+    });
+    for (const [id, old] of markers) if (!next.has(id)) map.removeLayer(old);
+    markers = next;
+
+    if (!hasFitted && markers.size) {
+      const group = L.featureGroup([...markers.values()]);
+      map.fitBounds(group.getBounds().pad(0.18), {maxZoom:16});
+      hasFitted = true;
+    }
+    updateRouteList(keys);
+    const stamp = new Date().toLocaleTimeString("ja-JP");
+    $("status").textContent = `${stamp} 取得 ・ 車両 ${vehicles.length} 台` +
+      (json.updateTime ? ` ・ サイト側時刻 ${json.updateTime}` : "") +
+      (all.length && !vehicles.length ? " ・ 車両位置データがありません" : "");
+  } catch (error) {
+    showError("取得できませんでした：" + error.message);
+    $("status").textContent = "";
+  } finally {
+    $("go").disabled = false;
+  }
+}
+function showError(message) {
+  const div = document.createElement("div");
+  div.className = "error";
+  div.textContent = message;
+  $("error").replaceChildren(div);
+}
+$("form").addEventListener("submit", event => { event.preventDefault(); load(); });
+$("auto").addEventListener("change", () => {
+  clearInterval(timer);
+  const seconds = Number($("auto").value);
+  if (seconds) timer = setInterval(() => { if ($("keys").value.trim()) load(); }, seconds * 1000);
+});
+(async () => {
+  await loadRouteNames();
+  const initial = new URLSearchParams(location.search).get("routeKeys");
+  if (initial) { $("keys").value = initial; load(); }
+})();
+</script>
+</body>
+</html>
