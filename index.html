@@ -29,10 +29,14 @@ button:disabled{opacity:.55;cursor:wait}
 .side h2{font-size:.95rem;margin:0 0 8px}
 .route-list{margin:0;padding-left:1.25rem;color:var(--muted);font-size:.85rem}
 .note{font-size:.78rem;color:var(--muted);margin:10px 0 0}
-
 .bus-div-icon {
   background: transparent;
   border: 0;
+}
+
+.bus-label-anchor {
+  display: block;
+  width: max-content;
 }
 
 .bus-label {
@@ -60,17 +64,27 @@ button:disabled{opacity:.55;cursor:wait}
   line-height: 1.35;
 }
 
-.bus-key {
-  font-size: 11px;
-  font-weight: 600;
+.bus-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  max-width: 240px;
 }
 
 .bus-name {
   font-size: 12px;
   font-weight: 800;
-  max-width: 240px;
+  max-width: 205px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.bus-key {
+  flex: none;
+  font-size: 10px;
+  font-weight: 500;
+  color: #657168;
 }
 
 .bus-number {
@@ -95,7 +109,6 @@ button:disabled{opacity:.55;cursor:wait}
 .bus-arrow-fallback {
   font-size: 27px;
 }
-
 .leaflet-popup-content{margin:10px 13px;line-height:1.6}
 .popup-title{font-weight:750;font-size:14px;margin-bottom:4px}
 .popup-row{font-size:12px}
@@ -152,6 +165,7 @@ let routeNames = new Map();
 let markers = new Map();
 let timer = null;
 let hasFitted = false;
+let displayedRouteSignature = "";
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, ch => ({
@@ -235,24 +249,30 @@ function makeMarker(m, key) {
   const src = imageUrl(m.busMarkImg);
   const busCode = String(m.busCode || "");
 
-  const routeLine = name
+  const nameHtml = name
     ? `<div class="bus-name">${esc(name)}</div>`
     : "";
 
-  const image = src
+  const imageHtml = src
     ? `<img src="${esc(src)}" alt="バス画像"
          onerror="this.style.display='none'">`
     : `<span class="bus-arrow-fallback">🚌</span>`;
 
   const label = `
-    <div class="bus-label">
-      <div class="bus-info">
-        <div class="bus-key">routeKey：${esc(key)}</div>
-        ${routeLine}
-        <div class="bus-number">車両番号：${esc(busCode || "不明")}</div>
-      </div>
-      <div class="bus-arrow">
-        ${image}
+    <div class="bus-label-anchor">
+      <div class="bus-label">
+        <div class="bus-info">
+          <div class="bus-title-row">
+            ${nameHtml}
+            <div class="bus-key">(${esc(key)})</div>
+          </div>
+          <div class="bus-number">
+            車両番号：${esc(busCode || "不明")}
+          </div>
+        </div>
+        <div class="bus-arrow">
+          ${imageHtml}
+        </div>
       </div>
     </div>
   `;
@@ -260,7 +280,7 @@ function makeMarker(m, key) {
   const icon = L.divIcon({
     className: "bus-div-icon",
     html: label,
-    iconSize: [0, 0],
+    iconSize: null,
     iconAnchor: [0, 0]
   });
 
@@ -318,6 +338,18 @@ function updateRouteVehicles(key, vehicles) {
       markers.delete(id);
     }
   }
+}
+ // 今回指定されたrouteKeyの組み合わせを確認
+const signature = keys.join(",");
+
+// routeKeyが前回と異なる場合は、古い車両マーカーをすべて削除
+if (signature !== displayedRouteSignature) {
+  for (const marker of markers.values()) {
+    map.removeLayer(marker);
+  }
+
+  markers.clear();
+  displayedRouteSignature = signature;
 }
 
 
