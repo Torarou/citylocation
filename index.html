@@ -29,13 +29,73 @@ button:disabled{opacity:.55;cursor:wait}
 .side h2{font-size:.95rem;margin:0 0 8px}
 .route-list{margin:0;padding-left:1.25rem;color:var(--muted);font-size:.85rem}
 .note{font-size:.78rem;color:var(--muted);margin:10px 0 0}
-.bus-div-icon{background:transparent;border:0}
-.bus-label{display:flex;align-items:center;gap:6px;width:max-content;max-width:280px;min-height:43px;padding:4px 9px 4px 5px;background:rgba(255,255,255,0.8);border:1px solid #52645a;border-radius:8px;box-shadow:0 2px 7px #0003;white-space:nowrap;color:#17221b}
-.bus-label img{width:25px;height:25px;object-fit:contain;flex:none}
-.bus-copy{display:flex;flex-direction:column;line-height:1.2;min-width:0}
-.bus-key{font-size:12px;font-weight:800}
-.bus-name{font-size:10px;color:#536158;max-width:210px;overflow:hidden;text-overflow:ellipsis}
-.bus-extra{font-size:10px;color:#536158;margin-top:2px}
+
+.bus-div-icon {
+  background: transparent;
+  border: 0;
+}
+
+.bus-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: 260px;
+  transform: translate(-50%, -100%);
+}
+
+.bus-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 105px;
+  max-width: 260px;
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(50, 60, 55, 0.8);
+  border-radius: 5px;
+  box-shadow: 0 2px 6px #0003;
+  color: #17221b;
+  white-space: nowrap;
+  line-height: 1.35;
+}
+
+.bus-key {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.bus-name {
+  font-size: 12px;
+  font-weight: 800;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bus-number {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.bus-arrow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 34px;
+  margin-top: 1px;
+}
+
+.bus-arrow img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.bus-arrow-fallback {
+  font-size: 27px;
+}
+
 .leaflet-popup-content{margin:10px 13px;line-height:1.6}
 .popup-title{font-weight:750;font-size:14px;margin-bottom:4px}
 .popup-row{font-size:12px}
@@ -169,20 +229,47 @@ function markerKey(m, index, route) {
   const bus = String(m.busCode ?? "");
   return bus ? `${route}:${bus}` : `${route}:${m.lat}:${m.lng}:${index}`;
 }
+
 function makeMarker(m, key) {
   const name = routeName(key);
   const src = imageUrl(m.busMarkImg);
+  const busCode = String(m.busCode || "");
+
+  const routeLine = name
+    ? `<div class="bus-name">${esc(name)}</div>`
+    : "";
+
   const image = src
-    ? `<img src="${esc(src)}" alt="" onerror="this.style.display='none'">`
-    : `<span style="font-size:25px">🚌</span>`;
-  const routeLine = name ? `<span class="bus-name">${esc(name)}</span>` : "";
-  const label = `<div class="bus-label">${image}<span class="bus-copy">` +
-    `<span class="bus-key">${esc(key || "routeKey不明")}</span>${routeLine}` +
-    `<span class="bus-extra">${esc(m.busCode || "")}${m.congestionLevel ? " ・ " + esc(congestionText(m.congestionLevel)) : ""}</span>` +
-    `</span></div>`;
-  const icon = L.divIcon({className:"bus-div-icon", html:label, iconSize:null, iconAnchor:[20,22]});
-  return L.marker([Number(m.lat), Number(m.lng)], {icon}).bindPopup(makePopup(m, key, name));
+    ? `<img src="${esc(src)}" alt="バス画像"
+         onerror="this.style.display='none'">`
+    : `<span class="bus-arrow-fallback">🚌</span>`;
+
+  const label = `
+    <div class="bus-label">
+      <div class="bus-info">
+        <div class="bus-key">routeKey：${esc(key)}</div>
+        ${routeLine}
+        <div class="bus-number">車両番号：${esc(busCode || "不明")}</div>
+      </div>
+      <div class="bus-arrow">
+        ${image}
+      </div>
+    </div>
+  `;
+
+  const icon = L.divIcon({
+    className: "bus-div-icon",
+    html: label,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0]
+  });
+
+  return L.marker(
+    [Number(m.lat), Number(m.lng)],
+    { icon }
+  ).bindPopup(makePopup(m, key, name));
 }
+
 function updateRouteList(keys) {
   const ul = $("routeList");
   ul.replaceChildren();
@@ -196,61 +283,154 @@ function updateRouteList(keys) {
 function normalizeKeys(value) {
   return value.trim().replace(/[、，\s]+/g, ",").split(",").map(x => x.trim()).filter(Boolean);
 }
+
+
+function updateRouteVehicles(key, vehicles) {
+  const nextIds = new Set();
+
+  vehicles.forEach((m, index) => {
+    const id = markerKey(m, index, key);
+    nextIds.add(id);
+
+    const marker = makeMarker(m, key);
+
+    if (markers.has(id)) {
+      const old = markers.get(id);
+
+      old.setLatLng(marker.getLatLng());
+      old.setIcon(marker.options.icon);
+      old.setPopupContent(
+        makePopup(m, key, routeName(key))
+      );
+
+      old.addTo(map);
+    } else {
+      marker.addTo(map);
+      markers.set(id, marker);
+    }
+  });
+
+  // 今回正常取得できたrouteKeyについて、
+  // 消えた車両だけを地図から削除する
+  for (const [id, marker] of markers) {
+    if (id.startsWith(key + ":") && !nextIds.has(id)) {
+      map.removeLayer(marker);
+      markers.delete(id);
+    }
+  }
+}
+
+
+let loading = false;
+
 async function load() {
-  const keys = normalizeKeys($("keys").value);
+  if (loading) return;
+
+  const keys = [...new Set(normalizeKeys($("keys").value))];
   const pass = $("pass").value || "1";
+
   if (!keys.length) return;
-  if (keys.length > 30 || keys.some(k => !/^\d{1,6}$/.test(k))) {
-    showError("routeKeyは1～6桁の数字を最大30件、カンマ区切りで入力してください。");
+
+  if (keys.length > 30 ||
+      keys.some(k => !/^\d{1,6}$/.test(k))) {
+    showError(
+      "routeKeyは1～6桁の数字を最大30件、カンマ区切りで入力してください。"
+    );
     return;
   }
+
+  if (!/^\d{1,3}$/.test(pass)) {
+    showError("fromDisplayPassNoは1～999で指定してください。");
+    return;
+  }
+
+  loading = true;
   $("go").disabled = true;
   $("error").replaceChildren();
   $("status").textContent = "車両位置を取得中…";
+
+  let totalVehicles = 0;
+  let successCount = 0;
+  const errors = [];
+
   try {
-    const url = `/api/vehicles?routeKeys=${encodeURIComponent(keys.join(","))}&fromDisplayPassNo=${encodeURIComponent(pass)}`;
-    const response = await fetch(url, {cache:"no-store"});
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.error || `HTTP ${response.status}`);
-    const all = Array.isArray(json.mapApproachData) ? json.mapApproachData : [];
-    const vehicles = all.filter(m => String(m.type) === "9" &&
-      Number.isFinite(Number(m.lat)) && Number.isFinite(Number(m.lng)));
-
-    const next = new Map();
-    vehicles.forEach((m, index) => {
-      const key = String(m.routeKey ?? (keys.length === 1 ? keys[0] : ""));
-      const id = markerKey(m, index, key);
-      const marker = makeMarker(m, key);
-      next.set(id, marker);
-      if (markers.has(id)) {
-        const old = markers.get(id);
-        old.setLatLng(marker.getLatLng());
-        old.setIcon(marker.options.icon);
-        old.setPopupContent(makePopup(m, key, routeName(key)));
-        old.addTo(map);
-        next.set(id, old);
-      } else marker.addTo(map);
-    });
-    for (const [id, old] of markers) if (!next.has(id)) map.removeLayer(old);
-    markers = next;
-
-    if (!hasFitted && markers.size) {
-      const group = L.featureGroup([...markers.values()]);
-      map.fitBounds(group.getBounds().pad(0.18), {maxZoom:16});
-      hasFitted = true;
-    }
     updateRouteList(keys);
+
+    // routeKeyごとに順番にアクセス
+    for (const key of keys) {
+      try {
+        $("status").textContent =
+          `取得中：routeKey ${key}（${successCount + errors.length + 1}/${keys.length}）`;
+
+        const url =
+          `/api/vehicles?routeKeys=${encodeURIComponent(key)}` +
+          `&fromDisplayPassNo=${encodeURIComponent(pass)}`;
+
+        const response = await fetch(url, {
+          cache: "no-store"
+        });
+
+        const json = await response.json();
+
+        if (!response.ok) {
+          throw new Error(json.error || `HTTP ${response.status}`);
+        }
+
+        const all = Array.isArray(json.mapApproachData)
+          ? json.mapApproachData
+          : [];
+
+        const vehicles = all.filter(m =>
+          String(m.type) === "9" &&
+          Number.isFinite(Number(m.lat)) &&
+          Number.isFinite(Number(m.lng))
+        );
+
+        // このrouteKeyの車両だけ更新
+        updateRouteVehicles(key, vehicles);
+
+        totalVehicles += vehicles.length;
+        successCount++;
+
+        // 最初の車両取得時に地図を調整
+        if (!hasFitted && markers.size) {
+          const group = L.featureGroup([...markers.values()]);
+          map.fitBounds(group.getBounds().pad(0.18), {
+            maxZoom: 16
+          });
+          hasFitted = true;
+        }
+
+      } catch (error) {
+        // 失敗したrouteKeyの既存マーカーは保持する
+        errors.push(`${key}：${error.message}`);
+        console.error(`routeKey ${key} の取得失敗`, error);
+      }
+    }
+
     const stamp = new Date().toLocaleTimeString("ja-JP");
-    $("status").textContent = `${stamp} 取得 ・ 車両 ${vehicles.length} 台` +
-      (json.updateTime ? ` ・ サイト側時刻 ${json.updateTime}` : "") +
-      (all.length && !vehicles.length ? " ・ 車両位置データがありません" : "");
-  } catch (error) {
-    showError("取得できませんでした：" + error.message);
-    $("status").textContent = "";
+
+    $("status").textContent =
+      `${stamp} 取得完了 ・ 成功 ${successCount}/${keys.length}経路` +
+      ` ・ 車両 ${totalVehicles}台`;
+
+    if (errors.length) {
+      showError(
+        "一部の経路を取得できませんでした。\n" +
+        errors.join("\n")
+      );
+    }
+
+    if (successCount === 0) {
+      $("status").textContent = "すべての経路の取得に失敗しました。";
+    }
+
   } finally {
+    loading = false;
     $("go").disabled = false;
   }
 }
+
 function showError(message) {
   const div = document.createElement("div");
   div.className = "error";
