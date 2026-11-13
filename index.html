@@ -194,7 +194,7 @@ function parseCsv(text) {
   if (field.length || row.length) { row.push(field); rows.push(row); }
   return rows;
 }
-const routeNames = new Map();
+let routeNames = new Map();
 
 async function loadRouteNames() {
   try {
