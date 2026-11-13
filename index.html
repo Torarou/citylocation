@@ -96,21 +96,21 @@ button:disabled{opacity:.55;cursor:wait}
 }
 
 .bus-arrow {
-  width: 34px;
-  height: 34px;
+  max-width: 32px;
+  max-height: 32px;
 }
 
 .bus-arrow img {
   display: block;
-  width: 34px;
-  height: 34px;
+  max-width: 32px;
+  max-height: 32px;
   object-fit: contain;
 }
 
 .bus-arrow-fallback {
   display: block;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   font-size: 27px;
   line-height: 34px;
   text-align: center;
@@ -172,6 +172,24 @@ let markers = new Map();
 let timer = null;
 let hasFitted = false;
 let displayedRouteSignature = "";
+
+(async function init() {
+  await loadRouteNames();
+
+  const params = new URLSearchParams(window.location.search);
+
+  // URLのrouteKeyを取得（複数指定にも対応）
+  const urlRouteKey = params.get("routeKey")
+    || params.get("routeKeys")
+    || "";
+
+  if (urlRouteKey) {
+    document.getElementById("routeKeys").value = urlRouteKey;
+
+    // routeKeyを入力した状態で車両情報を取得
+    await load();
+  }
+})();
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, ch => ({
