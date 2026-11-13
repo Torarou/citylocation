@@ -339,18 +339,7 @@ function updateRouteVehicles(key, vehicles) {
     }
   }
 }
- // 今回指定されたrouteKeyの組み合わせを確認
-const signature = keys.join(",");
 
-// routeKeyが前回と異なる場合は、古い車両マーカーをすべて削除
-if (signature !== displayedRouteSignature) {
-  for (const marker of markers.values()) {
-    map.removeLayer(marker);
-  }
-
-  markers.clear();
-  displayedRouteSignature = signature;
-}
 
 
 let loading = false;
@@ -387,6 +376,19 @@ async function load() {
 
   try {
     updateRouteList(keys);
+
+    // 今回指定されたrouteKeyの組み合わせを確認
+const signature = keys.join(",");
+
+// routeKeyが前回と異なる場合は、古い車両マーカーをすべて削除
+if (signature !== displayedRouteSignature) {
+  for (const marker of markers.values()) {
+    map.removeLayer(marker);
+  }
+
+  markers.clear();
+  displayedRouteSignature = signature;
+}
 
     // routeKeyごとに順番にアクセス
     for (const key of keys) {
