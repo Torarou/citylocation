@@ -194,39 +194,68 @@ function parseCsv(text) {
   if (field.length || row.length) { row.push(field); rows.push(row); }
   return rows;
 }
+const routeNames = new Map();
+
 async function loadRouteNames() {
-  routeNames = new Map();
   try {
-    const response = await fetch("/routes.csv", {cache:"no-store"});
-    if (!response.ok) return; // CSVがない場合は経路名なしで続行
-    const text = (await response.text()).replace(/^\uFEFF/, "");
-    const rows = parseCsv(text);
-    if (!rows.length) return;
-    const header = rows[0].map(x => x.trim());
-    const keyIndex = header.indexOf("routeKey");
-    const nameIndex = header.indexOf("routeName");
-    if (keyIndex < 0 || nameIndex < 0) return;
-    for (const row of rows.slice(1)) {
-      const key = (row[keyIndex] || "").trim();
-      const name = (row[nameIndex] || "").trim();
-      if (key && name) routeNames.set(key, name);
+    const response = await fetch("/routes.csv");
+    if (!response.ok) return;
+
+    const csv = await response.text();
+    const lines = csv.trim().split(/\r?\n/);
+
+    const headers = lines[0].split(",").map(v => v.trim());
+    const keyIndex = headers.indexOf("routeKey");
+    const longIndex = headers.indexOf("longname");
+    const shortIndex = headers.indexOf("shortname");
+
+    if (keyIndex < 0) return;
+
+    routeNames.clear();
+
+    for (const line of lines.slice(1)) {
+      if (!line.trim()) continue;
+
+      const cols = line.split(",").map(v => v.trim());
+      const key = cols[keyIndex];
+
+      if (!key) continue;
+
+      routeNames.set(key, {
+        longname: longIndex >= 0 ? (cols[longIndex] || "") : "",
+        shortname: shortIndex >= 0 ? (cols[shortIndex] || "") : ""
+      });
     }
-  } catch (_) {
-    // routes.csv がない、または読み込めない場合は何も表示しない
+  } catch (error) {
+    console.error("routes.csvの読み込みに失敗:", error);
   }
 }
-function routeName(key) { return routeNames.get(String(key)) || ""; }
+function routeName(key) {
+  const names = routeNames.get(String(key));
+  return names?.shortname || names?.longname || "";
+}
+
+function routeLongName(key) {
+  const names = routeNames.get(String(key));
+  return names?.longname || names?.shortname || "";
+}
 function makePopup(m, key, name) {
-  const rows = [
-    ["車両番号", m.busCode],
-    ["routeKey", key],
-    ["経路名", name],
-    ["付近の停留所", m._nearStop || m.busStopName],
-    ["停留所順", m.displaypassno ?? m._nearNo],
-    ["緯度・経度", (m.lat != null && m.lng != null) ? `${m.lat}, ${m.lng}` : ""],
-    ["混雑度", congestionText(m.congestionLevel)],
-    ["更新時刻", formatTime(m.updateTime)]
-  ];
+  const longName = routeLongName(key);
+
+  return `
+    <div>
+      <strong>経路名：</strong>${esc(longName)}<br>
+      <strong>routeKey：</strong>${esc(key)}<br>
+      <strong>車両番号：</strong>${esc(m.busCode || "不明")}<br>
+      <strong>停留所：</strong>${esc(m.stopName || "")}<br>
+      <strong>便番号：</strong>${esc(m.displayPassNo || "")}<br>
+      <strong>緯度：</strong>${esc(m.lat)}<br>
+      <strong>経度：</strong>${esc(m.lng)}<br>
+      <strong>混雑状況：</strong>${esc(m.congestion || "")}<br>
+      <strong>更新時刻：</strong>${esc(m.updateTime || "")}
+    </div>
+  `;
+}
   return `<div class="popup-title">バス車両情報</div>` +
     rows.filter(([label, value]) => value !== null && value !== undefined && value !== "")
       .map(([label, value]) => `<div class="popup-row"><b>${esc(label)}：</b>${esc(value)}</div>`).join("");
