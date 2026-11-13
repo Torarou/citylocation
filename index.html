@@ -36,8 +36,8 @@ button:disabled{opacity:.55;cursor:wait}
 
 .bus-label-anchor {
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 0;
+  height: 0;
 }
 
 .bus-label {
@@ -96,12 +96,18 @@ button:disabled{opacity:.55;cursor:wait}
 }
 
 .bus-arrow {
-  max-width: 32px;
-  max-height: 32px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: max-content;
+  height: max-content;
+  transform: translate(-50%, -50%);
 }
 
 .bus-arrow img {
   display: block;
+  width: auto;
+  height: auto;
   max-width: 32px;
   max-height: 32px;
   object-fit: contain;
@@ -303,35 +309,36 @@ function makeMarker(m, key) {
     : "";
 
   const imageHtml = src
-    ? `<img src="${esc(src)}" alt="バス画像"
-         onerror="this.style.display='none'">`
-    : `<span class="bus-arrow-fallback">🚌</span>`;
+  ? `<img src="${esc(src)}" alt="バス画像"
+       onerror="this.style.display='none'">`
+  : `<span class="bus-arrow-fallback">🚌</span>`;
 
   const label = `
-    <div class="bus-label-anchor">
-      <div class="bus-label">
-        <div class="bus-info">
-          <div class="bus-title-row">
-            ${nameHtml}
-            <div class="bus-key">(${esc(key)})</div>
-          </div>
-          <div class="bus-number">
-            車両番号：${esc(busCode || "不明")}
-          </div>
-        </div>
-      </div>
-      <div class="bus-arrow">
-        ${imageHtml}
-      </div>
-    </div>
-  `;
+   <div class="bus-label-anchor">
+     <div class="bus-label">
+       <div class="bus-info">
+         <div class="bus-title-row">
+           ${nameHtml}
+           <div class="bus-key">(${esc(key)})</div>
+         </div>
+         <div class="bus-number">
+           車両番号：${esc(busCode || "不明")}
+         </div>
+       </div>
+     </div>
+ 
+     <div class="bus-arrow">
+       ${imageHtml}
+     </div>
+   </div>
+ `;
 
   const icon = L.divIcon({
-    className: "bus-div-icon",
-    html: label,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17]
-  });
+   className: "bus-div-icon",
+   html: label,
+   iconSize: [0, 0],
+   iconAnchor: [0, 0]
+ });
 
   return L.marker(
     [Number(m.lat), Number(m.lng)],
