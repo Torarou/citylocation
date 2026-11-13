@@ -255,10 +255,7 @@ function makePopup(m, key, name) {
     </div>
   `;
 }
-  return `<div class="popup-title">バス車両情報</div>` +
-    rows.filter(([label, value]) => value !== null && value !== undefined && value !== "")
-      .map(([label, value]) => `<div class="popup-row"><b>${esc(label)}：</b>${esc(value)}</div>`).join("");
-}
+ 
 function congestionText(value) {
   return ({"1":"空席あり","2":"ゆったり立てる","3":"混雑","4":"大変混雑"})[String(value)] || (value ?? "");
 }
