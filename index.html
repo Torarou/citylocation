@@ -35,23 +35,28 @@ button:disabled{opacity:.55;cursor:wait}
 }
 
 .bus-label-anchor {
-  display: block;
-  width: max-content;
+  position: relative;
+  width: 34px;
+  height: 34px;
 }
 
 .bus-label {
+  position: absolute;
+  left: 50%;
+  top: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   width: max-content;
   max-width: 260px;
-  transform: translate(-50%, -100%);
+  transform: translate(-50%, calc(-100% - 4px));
 }
 
 .bus-info {
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-width: 105px;
   max-width: 260px;
   padding: 5px 9px;
   background: rgba(255, 255, 255, 0.7);
@@ -82,7 +87,6 @@ button:disabled{opacity:.55;cursor:wait}
 .bus-key {
   flex: none;
   font-size: 10px;
-  font-weight: 500;
   color: #657168;
 }
 
@@ -92,21 +96,24 @@ button:disabled{opacity:.55;cursor:wait}
 }
 
 .bus-arrow {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  max-height: 32px;
-  margin-top: 1px;
+  width: 34px;
+  height: 34px;
 }
 
 .bus-arrow img {
-  max-width: 32px;
-  max-height: 32px;
+  display: block;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
 }
 
 .bus-arrow-fallback {
+  display: block;
+  width: 34px;
+  height: 34px;
   font-size: 27px;
+  line-height: 34px;
+  text-align: center;
 }
 .leaflet-popup-content{margin:10px 13px;line-height:1.6}
 .popup-title{font-weight:750;font-size:14px;margin-bottom:4px}
@@ -291,12 +298,12 @@ function makeMarker(m, key) {
             <div class="bus-key">(${esc(key)})</div>
           </div>
           <div class="bus-number">
-            車番：${esc(busCode || "不明")}
+            車両番号：${esc(busCode || "不明")}
           </div>
         </div>
-        <div class="bus-arrow">
-          ${imageHtml}
-        </div>
+      </div>
+      <div class="bus-arrow">
+        ${imageHtml}
       </div>
     </div>
   `;
@@ -304,14 +311,14 @@ function makeMarker(m, key) {
   const icon = L.divIcon({
     className: "bus-div-icon",
     html: label,
-    iconSize: null,
-    iconAnchor: [0, 0]
+    iconSize: [34, 34],
+    iconAnchor: [17, 17]
   });
 
   return L.marker(
     [Number(m.lat), Number(m.lng)],
     { icon }
-  ).bindPopup(makePopup(m, key, name));
+  ).bindPopup(makePopup(m, key, routeLongName(key)));
 }
 
 function updateRouteList(keys) {
