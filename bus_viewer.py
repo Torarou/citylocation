@@ -1,4 +1,3 @@
-import os
 #!/usr/bin/env python3
 """京都市バス 車両位置マップ
 
@@ -13,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import ssl
 import urllib.error
